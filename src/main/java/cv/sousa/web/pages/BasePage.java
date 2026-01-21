@@ -1,0 +1,77 @@
+package cv.sousa.web.pages;
+
+import cv.sousa.web.SecureMessagingSession;
+import de.agilecoders.wicket.core.markup.html.bootstrap.navbar.Navbar;
+import de.agilecoders.wicket.core.markup.html.bootstrap.navbar.NavbarButton;
+import de.agilecoders.wicket.core.markup.html.bootstrap.navbar.NavbarComponents;
+import org.apache.wicket.markup.head.CssHeaderItem;
+import org.apache.wicket.markup.head.IHeaderResponse;
+import org.apache.wicket.markup.head.JavaScriptHeaderItem;
+import org.apache.wicket.markup.html.WebPage;
+import org.apache.wicket.markup.html.basic.Label;
+import org.apache.wicket.model.Model;
+import org.apache.wicket.request.resource.CssResourceReference;
+
+public abstract class BasePage extends WebPage {
+
+    public BasePage() {
+        add(new Label("pageTitle", getPageTitle()));
+        add(createNavbar());
+    }
+
+    protected abstract String getPageTitle();
+
+    @Override
+    public void renderHead(IHeaderResponse response) {
+        super.renderHead(response);
+
+        // Bootstrap 5 CSS
+        response.render(CssHeaderItem.forUrl(
+            "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"));
+
+        // Bootstrap Icons
+        response.render(CssHeaderItem.forUrl(
+            "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"));
+
+        // Custom CSS
+        response.render(CssHeaderItem.forUrl("/static/css/custom.css"));
+
+        // Bootstrap 5 JS
+        response.render(JavaScriptHeaderItem.forUrl(
+            "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"));
+    }
+
+    protected Navbar createNavbar() {
+        Navbar navbar = new Navbar("navbar");
+        navbar.setBrandName(Model.of("Secure Messaging"));
+
+        SecureMessagingSession session = SecureMessagingSession.get();
+
+        if (session.isAuthenticated()) {
+            navbar.addComponents(NavbarComponents.transform(
+                Navbar.ComponentPosition.LEFT,
+                new NavbarButton<>(DashboardPage.class, Model.of("Dashboard")),
+                new NavbarButton<>(ProfilePage.class, Model.of("Profile"))
+            ));
+
+            navbar.addComponents(NavbarComponents.transform(
+                Navbar.ComponentPosition.RIGHT,
+                new NavbarButton<>(LogoutPage.class, Model.of("Logout (" + session.getUserId() + ")"))
+            ));
+        } else {
+            navbar.addComponents(NavbarComponents.transform(
+                Navbar.ComponentPosition.RIGHT,
+                new NavbarButton<>(LoginPage.class, Model.of("Login")),
+                new NavbarButton<>(RegisterPage.class, Model.of("Register"))
+            ));
+        }
+
+        return navbar;
+    }
+
+    protected void requireAuthentication() {
+        if (!SecureMessagingSession.get().isAuthenticated()) {
+            setResponsePage(LoginPage.class);
+        }
+    }
+}

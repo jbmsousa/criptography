@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html xmlns:wicket="http://wicket.apache.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title wicket:id="pageTitle">Profile - Secure Messaging</title>
+</head>
+<body class="bg-light">
+    <nav wicket:id="navbar"></nav>
+
+    <main class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2><i class="bi bi-person-circle"></i> Profile</h2>
+                <hr>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-person"></i> User Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>User ID:</th>
+                                <td><span wicket:id="userId" id="profileUserId"></span></td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td><span id="onlineStatus" class="badge bg-success">Online</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card shadow-sm mb-4" wicket:id="keyInfoPanel">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-key"></i> Cryptographic Keys</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>ECDH Fingerprint:</th>
+                                <td><code wicket:id="ecdhFingerprint" id="ecdhFingerprint">Loading...</code></td>
+                            </tr>
+                            <tr>
+                                <th>RSA Fingerprint:</th>
+                                <td><code wicket:id="rsaFingerprint" id="rsaFingerprint">Loading...</code></td>
+                            </tr>
+                            <tr>
+                                <th>Keys Created:</th>
+                                <td><span wicket:id="keyCreatedAt" id="keyCreatedAt">Loading...</span></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-warning">
+                        <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Regenerate Keys</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Regenerating your keys will invalidate all existing sessions.
+                            Other users will need to verify your new key fingerprint.
+                        </p>
+                        <form wicket:id="keyForm" id="keyForm">
+                            <button wicket:id="regenerateKeys" type="button" class="btn btn-warning" id="regenerateBtn">
+                                <i class="bi bi-arrow-repeat"></i> Regenerate Keys
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card shadow-sm mb-4 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="bi bi-x-circle"></i> Revoke Keys</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            If you believe your private keys have been compromised, revoke them immediately.
+                            This action cannot be undone.
+                        </p>
+                        <form wicket:id="revokeForm" id="revokeForm">
+                            <button wicket:id="revokeKeys" type="button" class="btn btn-danger" id="revokeBtn">
+                                <i class="bi bi-x-circle"></i> Revoke Keys
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const authToken = localStorage.getItem('authToken');
+        const currentUserId = localStorage.getItem('userId');
+
+        if (!authToken) {
+            window.location.href = '/login';
+        }
+
+        // Calculate fingerprint from key
+        async function calculateFingerprint(keyB64) {
+            const keyData = Uint8Array.from(atob(keyB64), c => c.charCodeAt(0));
+            const hashBuffer = await window.crypto.subtle.digest('SHA-256', keyData);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(':');
+        }
+
+        // Load profile info
+        async function loadProfile() {
+            try {
+                const response = await fetch('/api/keys/' + currentUserId);
+                if (response.ok) {
+                    const userData = await response.json();
+                    document.getElementById('profileUserId').textContent = userData.userId;
+
+                    // Calculate fingerprints
+                    if (userData.ecdhPublicKey) {
+                        document.getElementById('ecdhFingerprint').textContent =
+                            await calculateFingerprint(userData.ecdhPublicKey);
+                    }
+                    if (userData.rsaPublicKey) {
+                        document.getElementById('rsaFingerprint').textContent =
+                            await calculateFingerprint(userData.rsaPublicKey);
+                    }
+
+                    document.getElementById('keyCreatedAt').textContent =
+                        new Date(userData.registeredAt).toLocaleDateString();
+                }
+            } catch (err) {
+                console.error('Failed to load profile:', err);
+            }
+        }
+
+        // Regenerate keys
+        document.getElementById('regenerateBtn').addEventListener('click', async function() {
+            if (!confirm('Are you sure you want to regenerate your keys? This will invalidate all existing sessions.')) {
+                return;
+            }
+
+            try {
+                // Generate new ECDH key pair
+                const ecdhKeyPair = await window.crypto.subtle.generateKey(
+                    { name: 'ECDH', namedCurve: 'P-256' },
+                    true,
+                    ['deriveKey', 'deriveBits']
+                );
+
+                // Generate new RSA key pair
+                const rsaKeyPair = await window.crypto.subtle.generateKey(
+                    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+                    true,
+                    ['sign', 'verify']
+                );
+
+                // Export keys
+                const ecdhPublicKey = await window.crypto.subtle.exportKey('spki', ecdhKeyPair.publicKey);
+                const rsaPublicKey = await window.crypto.subtle.exportKey('spki', rsaKeyPair.publicKey);
+                const ecdhPrivateKey = await window.crypto.subtle.exportKey('pkcs8', ecdhKeyPair.privateKey);
+                const rsaPrivateKey = await window.crypto.subtle.exportKey('pkcs8', rsaKeyPair.privateKey);
+
+                const ecdhPublicKeyB64 = btoa(String.fromCharCode(...new Uint8Array(ecdhPublicKey)));
+                const rsaPublicKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rsaPublicKey)));
+                const ecdhPrivateKeyB64 = btoa(String.fromCharCode(...new Uint8Array(ecdhPrivateKey)));
+                const rsaPrivateKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rsaPrivateKey)));
+
+                // Update on server
+                const response = await fetch('/api/keys/' + currentUserId + '/keys', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({
+                        ecdhPublicKey: ecdhPublicKeyB64,
+                        rsaPublicKey: rsaPublicKeyB64
+                    })
+                });
+
+                if (response.ok) {
+                    // Update local storage
+                    localStorage.setItem('ecdhPrivateKey', ecdhPrivateKeyB64);
+                    localStorage.setItem('rsaPrivateKey', rsaPrivateKeyB64);
+
+                    alert('Keys regenerated successfully!');
+                    loadProfile();
+                } else {
+                    alert('Failed to update keys on server');
+                }
+            } catch (err) {
+                alert('Error regenerating keys: ' + err.message);
+            }
+        });
+
+        // Revoke keys
+        document.getElementById('revokeBtn').addEventListener('click', async function() {
+            if (!confirm('Are you sure you want to revoke your keys? This action cannot be undone and you will need to register again.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/revocation/revoke', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({
+                        userId: currentUserId,
+                        reason: 'User requested revocation'
+                    })
+                });
+
+                if (response.ok) {
+                    // Clear local storage
+                    localStorage.clear();
+                    alert('Keys revoked. You will be logged out.');
+                    window.location.href = '/login';
+                } else {
+                    alert('Failed to revoke keys');
+                }
+            } catch (err) {
+                alert('Error revoking keys: ' + err.message);
+            }
+        });
+
+        loadProfile();
+    </script>
+</body>
+</html>
