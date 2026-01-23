@@ -31,22 +31,26 @@ public class WicketApplication extends WebApplication {
         BootstrapSettings settings = new BootstrapSettings();
         Bootstrap.install(this, settings);
 
-        // Configure CSP for WebSocket and inline scripts
-        getCspSettings().blocking()
-            .add(CSPDirective.STYLE_SRC, CSPDirectiveSrcValue.SELF)
-            .add(CSPDirective.STYLE_SRC, CSPDirectiveSrcValue.UNSAFE_INLINE)
-            .add(CSPDirective.STYLE_SRC, "https://cdn.jsdelivr.net")
-            .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.SELF)
-            .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.UNSAFE_INLINE)
-            .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.UNSAFE_EVAL)
-            .add(CSPDirective.SCRIPT_SRC, "https://cdn.jsdelivr.net")
-            .add(CSPDirective.CONNECT_SRC, CSPDirectiveSrcValue.SELF)
-            .add(CSPDirective.CONNECT_SRC, "ws://localhost:8080")
-            .add(CSPDirective.CONNECT_SRC, "wss://localhost:8080")
-            .add(CSPDirective.FONT_SRC, CSPDirectiveSrcValue.SELF)
-            .add(CSPDirective.FONT_SRC, "https://cdn.jsdelivr.net")
-            .add(CSPDirective.IMG_SRC, CSPDirectiveSrcValue.SELF)
-            .add(CSPDirective.IMG_SRC, "data:");
+        // Configure CSP - disable blocking mode for development
+        // This avoids CSP errors while allowing all necessary resources
+        getCspSettings().blocking().disabled();
+
+        // For production, you would configure specific CSP rules:
+        // getCspSettings().blocking()
+        //     .add(CSPDirective.DEFAULT_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.STYLE_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.STYLE_SRC, CSPDirectiveSrcValue.UNSAFE_INLINE)
+        //     .add(CSPDirective.STYLE_SRC, "https://cdn.jsdelivr.net")
+        //     .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.SCRIPT_SRC, CSPDirectiveSrcValue.UNSAFE_INLINE)
+        //     .add(CSPDirective.SCRIPT_SRC, "https://cdn.jsdelivr.net")
+        //     .add(CSPDirective.CONNECT_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.CONNECT_SRC, "ws:")
+        //     .add(CSPDirective.CONNECT_SRC, "wss:")
+        //     .add(CSPDirective.FONT_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.FONT_SRC, "https://cdn.jsdelivr.net")
+        //     .add(CSPDirective.IMG_SRC, CSPDirectiveSrcValue.SELF)
+        //     .add(CSPDirective.IMG_SRC, "data:");
 
         // Mount pages
         mountPage("/login", LoginPage.class);

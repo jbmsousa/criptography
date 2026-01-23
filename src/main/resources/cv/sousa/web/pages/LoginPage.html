@@ -6,81 +6,50 @@
     <title wicket:id="pageTitle">Login - Secure Messaging</title>
 </head>
 <body class="bg-light">
-    <nav wicket:id="navbar"></nav>
+<nav wicket:id="navbar"></nav>
 
-    <main class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="card shadow">
-                    <div class="card-header bg-primary text-white text-center">
-                        <h4><i class="bi bi-shield-lock"></i> Login</h4>
+<main class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4 class="mb-0"><i class="bi bi-shield-lock"></i> Login</h4>
+                </div>
+                <div class="card-body">
+                    <div wicket:id="feedback" class="mb-3"></div>
+                    <div id="alertContainer"></div>
+
+                    <form wicket:id="loginForm">
+                        <div class="mb-3">
+                            <label for="userId" class="form-label">User ID</label>
+                            <input wicket:id="userId" type="text" class="form-control" id="userId"
+                                   placeholder="Enter your user ID" required autocomplete="username">
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input wicket:id="password" type="password" class="form-control" id="password"
+                                   placeholder="Enter your password" required autocomplete="current-password">
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary" id="loginBtn">
+                                <i class="bi bi-box-arrow-in-right"></i> Login
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="my-4">
+                    <div id="keyWarning" class="alert alert-warning small d-none">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Warning:</strong> No private keys found in this browser.
+                        You may need to re-register or import your keys.
                     </div>
-                    <div class="card-body">
-                        <div wicket:id="feedback" class="mb-3"></div>
-                        <div id="alertContainer"></div>
-
-                        <form wicket:id="loginForm" id="loginForm">
-                            <div class="mb-3">
-                                <label for="userId" class="form-label">User ID</label>
-                                <input wicket:id="userId" type="text" class="form-control" id="userId"
-                                       placeholder="Enter your user ID" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Password</label>
-                                <input wicket:id="password" type="password" class="form-control" id="password"
-                                       placeholder="Enter your password" required>
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary" id="loginBtn">
-                                    <i class="bi bi-box-arrow-in-right"></i> Login
-                                </button>
-                            </div>
-                        </form>
-
-                        <hr>
-                        <p class="text-center mb-0">
-                            Don't have an account? <a href="register">Register here</a>
-                        </p>
-                    </div>
+                    <p class="text-center mb-0 small">
+                        Don't have an account? <a href="/register" class="text-decoration-none">Register here</a>
+                    </p>
                 </div>
             </div>
         </div>
-    </main>
-
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const userId = document.getElementById('userId').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, password })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    localStorage.setItem('authToken', data.token);
-                    localStorage.setItem('userId', data.userId);
-                    window.location.href = '/dashboard';
-                } else {
-                    const error = await response.json();
-                    showAlert(error.error || 'Login failed', 'danger');
-                }
-            } catch (err) {
-                showAlert('Connection error: ' + err.message, 'danger');
-            }
-        });
-
-        function showAlert(message, type) {
-            document.getElementById('alertContainer').innerHTML =
-                `<div class="alert alert-${type} alert-dismissible fade show">
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>`;
-        }
-    </script>
+    </div>
+</main>
 </body>
 </html>

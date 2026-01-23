@@ -12,4 +12,12 @@ import org.apache.wicket.protocol.http.WicketFilter;
     }
 )
 public class WicketServletFilter extends WicketFilter {
+
+    @Override
+    public void destroy() {
+        if (getApplication() != null) {
+            getApplication().internalDestroy();
+        }
+        super.destroy();
+    }
 }

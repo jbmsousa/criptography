@@ -34,7 +34,6 @@ public class ChatPage extends BasePage {
     @Override
     public void renderHead(IHeaderResponse response) {
         super.renderHead(response);
-        response.render(JavaScriptHeaderItem.forUrl("/static/js/crypto.js"));
-        response.render(JavaScriptHeaderItem.forUrl("/static/js/chat.js"));
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/chat-page.js"));
     }
 }

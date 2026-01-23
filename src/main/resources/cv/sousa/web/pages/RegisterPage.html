@@ -4,172 +4,69 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title wicket:id="pageTitle">Register - Secure Messaging</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 <body class="bg-light">
-    <nav wicket:id="navbar"></nav>
+<nav wicket:id="navbar"></nav>
 
-    <main class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-5">
-                <div class="card shadow">
-                    <div class="card-header bg-success text-white text-center">
-                        <h4><i class="bi bi-person-plus"></i> Register</h4>
+<main class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white text-center">
+                    <h4 class="mb-0"><i class="bi bi-person-plus"></i> Register</h4>
+                </div>
+                <div class="card-body">
+                    <div wicket:id="feedback" class="mb-3"></div>
+
+                    <div id="alertContainer"></div>
+
+                    <div id="keyGenStatus" class="alert alert-info d-none">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                        <strong>Security Step:</strong> Generating cryptographic keys...
                     </div>
-                    <div class="card-body">
-                        <div wicket:id="feedback" class="mb-3"></div>
-                        <div id="alertContainer"></div>
-                        <div id="keyGenStatus" class="alert alert-info d-none">
-                            <i class="bi bi-hourglass-split"></i> Generating cryptographic keys...
+
+                    <!-- Pure HTML form - JS handles submission via event listener -->
+                    <form id="registerForm">
+                        <div class="mb-3">
+                            <label for="regUserId" class="form-label">User ID</label>
+                            <input type="text" class="form-control" id="regUserId"
+                                   placeholder="Choose a user ID" required minlength="3">
+                            <div class="form-text">At least 3 characters.</div>
                         </div>
 
-                        <form wicket:id="registerForm" id="registerForm" onsubmit="return handleRegister(event);">
-                            <div class="mb-3">
-                                <label for="regUserId" class="form-label">User ID</label>
-                                <input wicket:id="userId" type="text" class="form-control" id="regUserId"
-                                       placeholder="Choose a user ID" required minlength="3">
-                                <div class="form-text">At least 3 characters</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="regPassword" class="form-label">Password</label>
-                                <input wicket:id="password" type="password" class="form-control" id="regPassword"
-                                       placeholder="Choose a strong password" required minlength="8">
-                                <div class="form-text">At least 8 characters</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="regConfirmPassword" class="form-label">Confirm Password</label>
-                                <input wicket:id="confirmPassword" type="password" class="form-control" id="regConfirmPassword"
-                                       placeholder="Confirm your password" required>
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-success" id="registerBtn">
-                                    <i class="bi bi-key"></i> Register & Generate Keys
-                                </button>
-                            </div>
-                        </form>
-
-                        <hr>
-                        <div class="alert alert-warning small">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Security Notice:</strong> Upon registration, ECDH and RSA key pairs will be
-                            generated in your browser. Your private keys never leave your device.
+                        <div class="mb-3">
+                            <label for="regPassword" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="regPassword"
+                                   placeholder="Choose a strong password" required minlength="8">
+                            <div class="form-text">At least 8 characters.</div>
                         </div>
-                        <p class="text-center mb-0">
-                            Already have an account? <a href="login">Login here</a>
-                        </p>
+
+                        <div class="mb-3">
+                            <label for="regConfirmPassword" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="regConfirmPassword"
+                                   placeholder="Confirm your password" required>
+                        </div>
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success" id="registerBtn">
+                                <i class="bi bi-key-fill"></i> Register & Generate Keys
+                            </button>
+                        </div>
+                    </form>
+
+                    <hr class="my-4">
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-shield-lock-fill"></i>
+                        <strong>Privacy First:</strong> Your ECDH and RSA private keys are generated 100% locally.
+                        The server only ever sees your <strong>Public Keys</strong>.
                     </div>
+                    <p class="text-center mb-0 small">
+                        Already have an account? <a href="/login" class="text-decoration-none">Login here</a>
+                    </p>
                 </div>
             </div>
         </div>
-    </main>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        async function handleRegister(e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            const userId = document.getElementById('regUserId').value.trim();
-            const password = document.getElementById('regPassword').value;
-            const confirmPassword = document.getElementById('regConfirmPassword').value;
-
-            if (userId.length < 3) {
-                showAlert('User ID must be at least 3 characters', 'danger');
-                return false;
-            }
-
-            if (password.length < 8) {
-                showAlert('Password must be at least 8 characters', 'danger');
-                return false;
-            }
-
-            if (password !== confirmPassword) {
-                showAlert('Passwords do not match', 'danger');
-                return false;
-            }
-
-            document.getElementById('keyGenStatus').classList.remove('d-none');
-            document.getElementById('registerBtn').disabled = true;
-
-            try {
-                console.log('Generating ECDH key pair...');
-                // Generate ECDH key pair
-                const ecdhKeyPair = await window.crypto.subtle.generateKey(
-                    { name: 'ECDH', namedCurve: 'P-256' },
-                    true,
-                    ['deriveKey', 'deriveBits']
-                );
-                console.log('ECDH key pair generated');
-
-                console.log('Generating RSA key pair...');
-                // Generate RSA key pair for signing
-                const rsaKeyPair = await window.crypto.subtle.generateKey(
-                    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-                    true,
-                    ['sign', 'verify']
-                );
-                console.log('RSA key pair generated');
-
-                // Export public keys
-                const ecdhPublicKey = await window.crypto.subtle.exportKey('spki', ecdhKeyPair.publicKey);
-                const rsaPublicKey = await window.crypto.subtle.exportKey('spki', rsaKeyPair.publicKey);
-
-                // Export private keys for local storage
-                const ecdhPrivateKey = await window.crypto.subtle.exportKey('pkcs8', ecdhKeyPair.privateKey);
-                const rsaPrivateKey = await window.crypto.subtle.exportKey('pkcs8', rsaKeyPair.privateKey);
-
-                // Convert to Base64
-                const ecdhPublicKeyB64 = btoa(String.fromCharCode(...new Uint8Array(ecdhPublicKey)));
-                const rsaPublicKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rsaPublicKey)));
-                const ecdhPrivateKeyB64 = btoa(String.fromCharCode(...new Uint8Array(ecdhPrivateKey)));
-                const rsaPrivateKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rsaPrivateKey)));
-
-                console.log('Registering with server...');
-                // Register with server
-                const response = await fetch('/api/keys/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: userId,
-                        password: password,
-                        ecdhPublicKey: ecdhPublicKeyB64,
-                        rsaPublicKey: rsaPublicKeyB64
-                    })
-                });
-
-                console.log('Response status:', response.status);
-
-                if (response.ok) {
-                    // Store private keys locally
-                    localStorage.setItem('ecdhPrivateKey', ecdhPrivateKeyB64);
-                    localStorage.setItem('rsaPrivateKey', rsaPrivateKeyB64);
-                    localStorage.setItem('userId', userId);
-
-                    showAlert('Registration successful! Redirecting to login...', 'success');
-                    setTimeout(() => window.location.href = '/login', 2000);
-                } else {
-                    const error = await response.json();
-                    showAlert(error.error || 'Registration failed', 'danger');
-                }
-            } catch (err) {
-                console.error('Registration error:', err);
-                showAlert('Error: ' + err.message, 'danger');
-            } finally {
-                document.getElementById('keyGenStatus').classList.add('d-none');
-                document.getElementById('registerBtn').disabled = false;
-            }
-
-            return false;
-        }
-
-        function showAlert(message, type) {
-            document.getElementById('alertContainer').innerHTML =
-                '<div class="alert alert-' + type + ' alert-dismissible fade show">' +
-                    message +
-                    '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>' +
-                '</div>';
-        }
-    </script>
+    </div>
+</main>
 </body>
 </html>
