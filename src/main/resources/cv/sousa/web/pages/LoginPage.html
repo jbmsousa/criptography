@@ -21,9 +21,10 @@
 
                     <form wicket:id="loginForm">
                         <div class="mb-3">
-                            <label for="userId" class="form-label">User ID</label>
+                            <label for="userId" class="form-label">NIF</label>
                             <input wicket:id="userId" type="text" class="form-control" id="userId"
-                                   placeholder="Enter your user ID" required autocomplete="username">
+                                   placeholder="Introduza o seu NIF" required autocomplete="username"
+                                   minlength="9" maxlength="9" pattern="\d{9}" inputmode="numeric">
                         </div>
                         <div class="mb-3">
                             <label for="password" class="form-label">Password</label>

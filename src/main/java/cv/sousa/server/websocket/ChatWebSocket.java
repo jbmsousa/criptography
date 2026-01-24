@@ -3,6 +3,7 @@ package cv.sousa.server.websocket;
 import cv.sousa.server.model.Message;
 import cv.sousa.server.service.AuthService;
 import cv.sousa.server.service.MessageService;
+import cv.sousa.server.service.UserService;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.websockets.next.*;
@@ -18,6 +19,9 @@ public class ChatWebSocket {
 
     @Inject
     MessageService messageService;
+
+    @Inject
+    UserService userService;
 
     // Map of userId -> WebSocket connection
     private static final Map<String, WebSocketConnection> activeConnections = new ConcurrentHashMap<>();
@@ -51,8 +55,15 @@ public class ChatWebSocket {
         String disconnectedUserId = getUserIdByConnection(connection);
         activeConnections.entrySet().removeIf(entry -> entry.getValue().id().equals(connection.id()));
 
-        // Broadcast offline status
+        // Update database and broadcast offline status
         if (disconnectedUserId != null) {
+            ManagedContext requestContext = Arc.container().requestContext();
+            requestContext.activate();
+            try {
+                userService.setUserOnline(disconnectedUserId, false);
+            } finally {
+                requestContext.deactivate();
+            }
             broadcastUserStatus(disconnectedUserId, false);
         }
         System.out.println("WebSocket connection closed: " + connection.id());
@@ -61,7 +72,20 @@ public class ChatWebSocket {
     @OnError
     public void onError(WebSocketConnection connection, Throwable error) {
         System.err.println("WebSocket error: " + error.getMessage());
+        String disconnectedUserId = getUserIdByConnection(connection);
         activeConnections.entrySet().removeIf(entry -> entry.getValue().id().equals(connection.id()));
+
+        // Update database status on error
+        if (disconnectedUserId != null) {
+            ManagedContext requestContext = Arc.container().requestContext();
+            requestContext.activate();
+            try {
+                userService.setUserOnline(disconnectedUserId, false);
+            } finally {
+                requestContext.deactivate();
+            }
+            broadcastUserStatus(disconnectedUserId, false);
+        }
     }
 
     private void handleAuth(WebSocketConnection connection, ChatMessage message) {
@@ -79,9 +103,8 @@ public class ChatWebSocket {
                 ManagedContext requestContext = Arc.container().requestContext();
                 requestContext.activate();
                 try {
-                    authService.getAuthenticatedUser(token).ifPresent(user -> {
-                        user.isOnline = true;
-                    });
+                    // Update user online status in database
+                    userService.setUserOnline(userId, true);
 
                     // Send auth success
                     connection.sendTextAndAwait(buildResponse("auth_success", userId, null, null));

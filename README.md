@@ -44,6 +44,12 @@ Run the main Quarkus application
 
 The application will be available at: **http://localhost:8080**
 
+### API Documentation (Swagger UI)
+
+Access the interactive API documentation at: **http://localhost:8080/q/swagger-ui**
+
+OpenAPI specification available at: **http://localhost:8080/openapi**
+
 ---
 
 ## Usage Guide
@@ -52,7 +58,7 @@ The application will be available at: **http://localhost:8080**
 
 1. Navigate to **http://localhost:8080/register**
 2. Enter:
-   - **User ID**: Your unique username (min 3 characters)
+   - **NIF**: Portuguese tax identification number (9 digits)
    - **Password**: Strong password (min 8 characters)
    - **Confirm Password**: Repeat password
 3. Click **"Register & Generate Keys"**

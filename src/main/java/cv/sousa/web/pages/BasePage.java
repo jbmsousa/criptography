@@ -25,6 +25,9 @@ public abstract class BasePage extends WebPage {
     public void renderHead(IHeaderResponse response) {
         super.renderHead(response);
 
+        // CSP headers are configured via application.properties (quarkus.http.header.*)
+        // This is more secure than meta tags as it's enforced by the server
+
         // Bootstrap 5 CSS
         response.render(CssHeaderItem.forUrl(
             "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"));
@@ -53,7 +56,9 @@ public abstract class BasePage extends WebPage {
 
     protected Navbar createNavbar() {
         Navbar navbar = new Navbar("navbar");
-        navbar.setBrandName(Model.of("Secure Messaging"));
+        navbar.setBrandName(Model.of("SecureChat"));
+        navbar.setPosition(Navbar.Position.TOP);
+        navbar.fluid(true);
 
         SecureMessagingSession session = SecureMessagingSession.get();
 
@@ -61,18 +66,18 @@ public abstract class BasePage extends WebPage {
             navbar.addComponents(NavbarComponents.transform(
                 Navbar.ComponentPosition.LEFT,
                 new NavbarButton<>(DashboardPage.class, Model.of("Dashboard")),
-                new NavbarButton<>(ProfilePage.class, Model.of("Profile"))
+                new NavbarButton<>(ProfilePage.class, Model.of("Perfil"))
             ));
 
             navbar.addComponents(NavbarComponents.transform(
                 Navbar.ComponentPosition.RIGHT,
-                new NavbarButton<>(LogoutPage.class, Model.of("Logout (" + session.getUserId() + ")"))
+                new NavbarButton<>(LogoutPage.class, Model.of("Sair (" + session.getUserId() + ")"))
             ));
         } else {
             navbar.addComponents(NavbarComponents.transform(
                 Navbar.ComponentPosition.RIGHT,
-                new NavbarButton<>(LoginPage.class, Model.of("Login")),
-                new NavbarButton<>(RegisterPage.class, Model.of("Register"))
+                new NavbarButton<>(LoginPage.class, Model.of("Entrar")),
+                new NavbarButton<>(RegisterPage.class, Model.of("Registar"))
             ));
         }
 

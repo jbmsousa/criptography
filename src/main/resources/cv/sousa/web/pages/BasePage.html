@@ -12,9 +12,16 @@
         <wicket:child/>
     </main>
 
-    <footer class="footer mt-auto py-3 bg-dark text-white text-center">
+    <footer class="footer mt-auto py-3 bg-dark text-white">
         <div class="container">
-            <span>Secure Messaging - End-to-End Encrypted Communication</span>
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <span><i class="bi bi-shield-lock-fill text-success me-2"></i>SecureChat - Criptografia Moderna</span>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <small class="text-muted">AES-256-GCM | ECDH P-256 | RSA-2048</small>
+                </div>
+            </div>
         </div>
     </footer>
 </body>
