@@ -38,25 +38,12 @@
             </div>
 
             <div class="col-md-6">
-                <div class="card shadow-sm mb-4" wicket:id="keyInfoPanel">
+                <div class="card shadow-sm mb-4">
                     <div class="card-header bg-info text-white">
                         <h5 class="mb-0"><i class="bi bi-key"></i> Cryptographic Keys</h5>
                     </div>
                     <div class="card-body">
-                        <table class="table table-borderless">
-                            <tr>
-                                <th>ECDH Fingerprint:</th>
-                                <td><code wicket:id="ecdhFingerprint" id="ecdhFingerprint">Loading...</code></td>
-                            </tr>
-                            <tr>
-                                <th>RSA Fingerprint:</th>
-                                <td><code wicket:id="rsaFingerprint" id="rsaFingerprint">Loading...</code></td>
-                            </tr>
-                            <tr>
-                                <th>Keys Created:</th>
-                                <td><span wicket:id="keyCreatedAt" id="keyCreatedAt">Loading...</span></td>
-                            </tr>
-                        </table>
+                        <div wicket:id="keyInfoPanel"></div>
                     </div>
                 </div>
             </div>

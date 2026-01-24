@@ -64,4 +64,9 @@ public class MessageService {
     public List<Message> getRecentMessages(String user1, String user2, int limit) {
         return messageRepository.findRecentMessages(user1, user2, limit);
     }
+
+    @Transactional
+    public void deleteAllMessages() {
+        messageRepository.deleteAll();
+    }
 }

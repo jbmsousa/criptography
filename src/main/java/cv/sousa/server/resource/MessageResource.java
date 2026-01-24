@@ -91,6 +91,23 @@ public class MessageResource {
             .orElse(Response.status(401).entity(new ErrorResponse("Invalid session")).build());
     }
 
+    @DELETE
+    @Path("/clear-all")
+    @Transactional
+    public Response clearAllMessages(@HeaderParam("Authorization") String authHeader) {
+        String token = extractToken(authHeader);
+        if (token == null) {
+            return Response.status(401).entity(new ErrorResponse("Authorization required")).build();
+        }
+
+        return authService.validateSession(token)
+            .map(userId -> {
+                messageService.deleteAllMessages();
+                return Response.ok(new SuccessResponse("All messages cleared")).build();
+            })
+            .orElse(Response.status(401).entity(new ErrorResponse("Invalid session")).build());
+    }
+
     @POST
     @Transactional
     public Response storeMessage(@HeaderParam("Authorization") String authHeader, StoreMessageRequest req) {

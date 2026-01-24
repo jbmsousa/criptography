@@ -3,6 +3,8 @@ package cv.sousa.server.websocket;
 import cv.sousa.server.model.Message;
 import cv.sousa.server.service.AuthService;
 import cv.sousa.server.service.MessageService;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import io.quarkus.websockets.next.*;
 import jakarta.inject.Inject;
 import java.util.Map;
@@ -45,8 +47,14 @@ public class ChatWebSocket {
 
     @OnClose
     public void onClose(WebSocketConnection connection) {
-        // Remove user from active connections
+        // Find and remove user from active connections
+        String disconnectedUserId = getUserIdByConnection(connection);
         activeConnections.entrySet().removeIf(entry -> entry.getValue().id().equals(connection.id()));
+
+        // Broadcast offline status
+        if (disconnectedUserId != null) {
+            broadcastUserStatus(disconnectedUserId, false);
+        }
         System.out.println("WebSocket connection closed: " + connection.id());
     }
 
@@ -66,18 +74,29 @@ public class ChatWebSocket {
         authService.validateSession(token).ifPresentOrElse(
             userId -> {
                 activeConnections.put(userId, connection);
-                authService.getAuthenticatedUser(token).ifPresent(user -> {
-                    user.isOnline = true;
-                });
 
-                // Send auth success
-                connection.sendTextAndAwait(buildResponse("auth_success", userId, null, null));
+                // Activate request context for database operations
+                ManagedContext requestContext = Arc.container().requestContext();
+                requestContext.activate();
+                try {
+                    authService.getAuthenticatedUser(token).ifPresent(user -> {
+                        user.isOnline = true;
+                    });
 
-                // Send any undelivered messages
-                messageService.getUndeliveredMessages(userId).forEach(msg -> {
-                    connection.sendTextAndAwait(buildMessageResponse(msg));
-                    messageService.markAsDelivered(msg.id);
-                });
+                    // Send auth success
+                    connection.sendTextAndAwait(buildResponse("auth_success", userId, null, null));
+
+                    // Broadcast user online status to all other connected users
+                    broadcastUserStatus(userId, true);
+
+                    // Send any undelivered messages
+                    messageService.getUndeliveredMessages(userId).forEach(msg -> {
+                        connection.sendTextAndAwait(buildMessageResponse(msg));
+                        messageService.markAsDelivered(msg.id);
+                    });
+                } finally {
+                    requestContext.deactivate();
+                }
             },
             () -> sendError(connection, "Invalid authentication token")
         );
@@ -90,26 +109,36 @@ public class ChatWebSocket {
             return;
         }
 
-        // Store the message
-        Message storedMessage = messageService.saveMessage(
-            senderId,
-            message.recipientId,
-            message.sessionId,
-            message.encryptedContent,
-            message.signature
-        );
+        System.out.println("Storing message - encryptedContent: " +
+            (message.encryptedContent != null ? message.encryptedContent.substring(0, Math.min(100, message.encryptedContent.length())) : "null"));
 
-        // Try to deliver to recipient
-        WebSocketConnection recipientConnection = activeConnections.get(message.recipientId);
-        if (recipientConnection != null) {
-            recipientConnection.sendTextAndAwait(buildMessageResponse(storedMessage));
-            messageService.markAsDelivered(storedMessage.id);
+        // Activate request context for database operations
+        ManagedContext requestContext = Arc.container().requestContext();
+        requestContext.activate();
+        try {
+            // Store the message
+            Message storedMessage = messageService.saveMessage(
+                senderId,
+                message.recipientId,
+                message.sessionId,
+                message.encryptedContent,
+                message.signature
+            );
 
-            // Send delivery confirmation to sender
-            connection.sendTextAndAwait(buildResponse("delivered", message.recipientId, storedMessage.id.toString(), null));
-        } else {
-            // Message stored but not delivered (recipient offline)
-            connection.sendTextAndAwait(buildResponse("stored", message.recipientId, storedMessage.id.toString(), null));
+            // Try to deliver to recipient
+            WebSocketConnection recipientConnection = activeConnections.get(message.recipientId);
+            if (recipientConnection != null) {
+                recipientConnection.sendTextAndAwait(buildMessageResponse(storedMessage));
+                messageService.markAsDelivered(storedMessage.id);
+
+                // Send delivery confirmation to sender
+                connection.sendTextAndAwait(buildResponse("delivered", message.recipientId, storedMessage.id.toString(), null));
+            } else {
+                // Message stored but not delivered (recipient offline)
+                connection.sendTextAndAwait(buildResponse("stored", message.recipientId, storedMessage.id.toString(), null));
+            }
+        } finally {
+            requestContext.deactivate();
         }
     }
 
@@ -147,15 +176,22 @@ public class ChatWebSocket {
 
     private void handleAcknowledge(WebSocketConnection connection, ChatMessage message) {
         if (message.messageId != null) {
-            messageService.markAsRead(Long.parseLong(message.messageId));
+            // Activate request context for database operations
+            ManagedContext requestContext = Arc.container().requestContext();
+            requestContext.activate();
+            try {
+                messageService.markAsRead(Long.parseLong(message.messageId));
 
-            // Notify sender that message was read
-            String senderId = message.senderId;
-            WebSocketConnection senderConnection = activeConnections.get(senderId);
-            if (senderConnection != null) {
-                senderConnection.sendTextAndAwait(
-                    String.format("{\"type\":\"read\",\"messageId\":\"%s\"}", message.messageId)
-                );
+                // Notify sender that message was read
+                String senderId = message.senderId;
+                WebSocketConnection senderConnection = activeConnections.get(senderId);
+                if (senderConnection != null) {
+                    senderConnection.sendTextAndAwait(
+                        String.format("{\"type\":\"read\",\"messageId\":\"%s\"}", message.messageId)
+                    );
+                }
+            } finally {
+                requestContext.deactivate();
             }
         }
     }
@@ -183,17 +219,25 @@ public class ChatWebSocket {
     }
 
     private String buildMessageResponse(Message msg) {
+        // Escape encryptedContent since it contains JSON with quotes
+        String escapedContent = msg.encryptedContent != null
+            ? msg.encryptedContent.replace("\\", "\\\\").replace("\"", "\\\"")
+            : "";
+        String escapedSignature = msg.signature != null
+            ? msg.signature.replace("\\", "\\\\").replace("\"", "\\\"")
+            : "";
         return String.format(
             "{\"type\":\"message\",\"id\":\"%d\",\"senderId\":\"%s\",\"recipientId\":\"%s\",\"sessionId\":\"%s\",\"encryptedContent\":\"%s\",\"signature\":\"%s\",\"timestamp\":\"%s\"}",
             msg.id, msg.senderId, msg.recipientId,
             msg.sessionId != null ? msg.sessionId : "",
-            msg.encryptedContent, msg.signature != null ? msg.signature : "",
+            escapedContent, escapedSignature,
             msg.sentAt.toString()
         );
     }
 
     private ChatMessage parseMessage(String json) {
         // Simple JSON parsing (in production, use Jackson)
+        System.out.println("Parsing message: " + json.substring(0, Math.min(200, json.length())));
         ChatMessage msg = new ChatMessage();
         msg.type = extractJsonValue(json, "type");
         msg.token = extractJsonValue(json, "token");
@@ -206,6 +250,8 @@ public class ChatWebSocket {
         msg.publicKey = extractJsonValue(json, "publicKey");
         msg.salt = extractJsonValue(json, "salt");
         msg.isTyping = "true".equals(extractJsonValue(json, "isTyping"));
+        System.out.println("Extracted encryptedContent: " +
+            (msg.encryptedContent != null ? msg.encryptedContent.substring(0, Math.min(100, msg.encryptedContent.length())) : "null"));
         return msg;
     }
 
@@ -220,9 +266,19 @@ public class ChatWebSocket {
         if (valueStart >= json.length()) return null;
 
         if (json.charAt(valueStart) == '"') {
-            int valueEnd = json.indexOf('"', valueStart + 1);
-            if (valueEnd == -1) return null;
-            return json.substring(valueStart + 1, valueEnd);
+            // Find closing quote, handling escaped quotes
+            int valueEnd = valueStart + 1;
+            while (valueEnd < json.length()) {
+                char c = json.charAt(valueEnd);
+                if (c == '"' && json.charAt(valueEnd - 1) != '\\') {
+                    break;
+                }
+                valueEnd++;
+            }
+            if (valueEnd >= json.length()) return null;
+            // Unescape the value
+            String value = json.substring(valueStart + 1, valueEnd);
+            return value.replace("\\\"", "\"").replace("\\\\", "\\");
         } else {
             int valueEnd = valueStart;
             while (valueEnd < json.length() && json.charAt(valueEnd) != ',' && json.charAt(valueEnd) != '}') {
@@ -241,6 +297,23 @@ public class ChatWebSocket {
         if (connection != null) {
             connection.sendTextAndAwait(message);
         }
+    }
+
+    private void broadcastUserStatus(String userId, boolean isOnline) {
+        String statusMessage = String.format(
+            "{\"type\":\"user_status\",\"userId\":\"%s\",\"isOnline\":%s}",
+            userId, isOnline
+        );
+        // Broadcast to all other connected users
+        activeConnections.forEach((connectedUserId, conn) -> {
+            if (!connectedUserId.equals(userId)) {
+                try {
+                    conn.sendTextAndAwait(statusMessage);
+                } catch (Exception e) {
+                    System.err.println("Failed to send status to " + connectedUserId + ": " + e.getMessage());
+                }
+            }
+        });
     }
 
     // Inner class for message parsing
