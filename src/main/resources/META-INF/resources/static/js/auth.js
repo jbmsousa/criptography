@@ -1,20 +1,59 @@
 /**
  * Secure Messaging - Authentication Module
  * Handles user registration, login, and session management
+ * Uses SecureStorage for encrypted key storage
  */
 
 const AuthModule = (function() {
     'use strict';
 
-    const TOKEN_KEY = 'authToken';
-    const USER_ID_KEY = 'userId';
-    const ECDH_PRIVATE_KEY = 'ecdhPrivateKey';
-    const RSA_PRIVATE_KEY = 'rsaPrivateKey';
+    // Legacy localStorage keys (for migration)
+    const LEGACY_TOKEN_KEY = 'authToken';
+    const LEGACY_USER_ID_KEY = 'userId';
+    const LEGACY_ECDH_PRIVATE_KEY = 'ecdhPrivateKey';
+    const LEGACY_RSA_PRIVATE_KEY = 'rsaPrivateKey';
+
+    // Track if secure storage is initialized
+    let secureStorageReady = false;
+
+    /**
+     * Initialize secure storage with user password
+     * @param {string} password - User password for key derivation
+     * @param {boolean} isNewUser - Whether this is a new user registration
+     */
+    async function initializeSecureStorage(password, isNewUser = false) {
+        try {
+            await SecureStorage.initialize(password, isNewUser);
+            secureStorageReady = true;
+
+            // Check for legacy keys that need migration
+            if (!isNewUser && SecureStorage.hasLegacyKeys()) {
+                const userId = SecureStorage.getUserId() || localStorage.getItem(LEGACY_USER_ID_KEY);
+                if (userId) {
+                    console.log('Migrating keys from localStorage to secure storage...');
+                    await SecureStorage.migrateFromLocalStorage(userId);
+                }
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize secure storage:', error);
+            secureStorageReady = false;
+            throw error;
+        }
+    }
+
+    /**
+     * Check if secure storage is ready
+     */
+    function isSecureStorageReady() {
+        return secureStorageReady && SecureStorage.isStorageInitialized();
+    }
 
     /**
      * Register new user with generated key pairs
      */
-    async function register(userId, password, onProgress) {
+    async function register(userId, nome, email, password, onProgress) {
         try {
             if (onProgress) onProgress('Validating input...');
 
@@ -24,6 +63,10 @@ const AuthModule = (function() {
             if (!password || password.length < 8) {
                 throw new Error('Password must be at least 8 characters');
             }
+
+            // Initialize secure storage for new user
+            if (onProgress) onProgress('Initializing secure storage...');
+            await initializeSecureStorage(password, true);
 
             if (onProgress) onProgress('Generating ECDH key pair...');
 
@@ -47,6 +90,8 @@ const AuthModule = (function() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: userId,
+                    nome: nome,
+                    email: email,
                     password: password,
                     ecdhPublicKey: ecdhPublicKey,
                     rsaPublicKey: rsaPublicKey
@@ -60,10 +105,10 @@ const AuthModule = (function() {
 
             if (onProgress) onProgress('Storing keys securely...');
 
-            // Store private keys locally
-            localStorage.setItem(ECDH_PRIVATE_KEY, ecdhPrivateKey);
-            localStorage.setItem(RSA_PRIVATE_KEY, rsaPrivateKey);
-            localStorage.setItem(USER_ID_KEY, userId);
+            // Store private keys in secure storage
+            await SecureStorage.setECDHPrivateKey(ecdhPrivateKey, userId);
+            await SecureStorage.setRSAPrivateKey(rsaPrivateKey, userId);
+            SecureStorage.setUserId(userId);
 
             if (onProgress) onProgress('Registration complete!');
 
@@ -83,6 +128,9 @@ const AuthModule = (function() {
      */
     async function login(userId, password) {
         try {
+            // Initialize secure storage with password
+            await initializeSecureStorage(password, false);
+
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -96,9 +144,9 @@ const AuthModule = (function() {
 
             const data = await response.json();
 
-            // Store session
-            localStorage.setItem(TOKEN_KEY, data.token);
-            localStorage.setItem(USER_ID_KEY, data.userId);
+            // Store session token securely
+            await SecureStorage.setAuthToken(data.token, userId);
+            SecureStorage.setUserId(data.userId);
 
             return {
                 success: true,
@@ -115,7 +163,7 @@ const AuthModule = (function() {
      * Logout user
      */
     async function logout() {
-        const token = getToken();
+        const token = await getToken();
         if (token) {
             try {
                 await fetch('/api/auth/logout', {
@@ -127,17 +175,20 @@ const AuthModule = (function() {
             }
         }
 
-        // Clear all stored data
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(USER_ID_KEY);
-        // Keep private keys for future logins
+        // Clear session data but keep private keys for future logins
+        await SecureStorage.deleteAuthToken();
+        SecureStorage.deleteUserId();
+
+        // Also clear legacy localStorage data
+        localStorage.removeItem(LEGACY_TOKEN_KEY);
+        localStorage.removeItem(LEGACY_USER_ID_KEY);
     }
 
     /**
      * Validate current session
      */
     async function validateSession() {
-        const token = getToken();
+        const token = await getToken();
         if (!token) {
             return { valid: false };
         }
@@ -161,43 +212,68 @@ const AuthModule = (function() {
     /**
      * Check if user is authenticated
      */
-    function isAuthenticated() {
-        return !!getToken() && !!getUserId();
+    async function isAuthenticated() {
+        const token = await getToken();
+        const userId = getUserId();
+        return !!token && !!userId;
     }
 
     /**
      * Get authentication token
      */
-    function getToken() {
-        return localStorage.getItem(TOKEN_KEY);
+    async function getToken() {
+        if (isSecureStorageReady()) {
+            return await SecureStorage.getAuthToken();
+        }
+        // Fallback to legacy localStorage
+        return localStorage.getItem(LEGACY_TOKEN_KEY);
     }
 
     /**
      * Get current user ID
      */
     function getUserId() {
-        return localStorage.getItem(USER_ID_KEY);
+        return SecureStorage.getUserId() || localStorage.getItem(LEGACY_USER_ID_KEY);
     }
 
     /**
      * Get stored ECDH private key
      */
-    function getECDHPrivateKey() {
-        return localStorage.getItem(ECDH_PRIVATE_KEY);
+    async function getECDHPrivateKey() {
+        if (isSecureStorageReady()) {
+            return await SecureStorage.getECDHPrivateKey();
+        }
+        // Fallback to legacy localStorage
+        return localStorage.getItem(LEGACY_ECDH_PRIVATE_KEY);
     }
 
     /**
      * Get stored RSA private key
      */
-    function getRSAPrivateKey() {
-        return localStorage.getItem(RSA_PRIVATE_KEY);
+    async function getRSAPrivateKey() {
+        if (isSecureStorageReady()) {
+            return await SecureStorage.getRSAPrivateKey();
+        }
+        // Fallback to legacy localStorage
+        return localStorage.getItem(LEGACY_RSA_PRIVATE_KEY);
     }
 
     /**
      * Check if private keys exist
      */
-    function hasPrivateKeys() {
-        return !!getECDHPrivateKey() && !!getRSAPrivateKey();
+    async function hasPrivateKeys() {
+        const ecdh = await getECDHPrivateKey();
+        const rsa = await getRSAPrivateKey();
+        return !!ecdh && !!rsa;
+    }
+
+    /**
+     * Check for legacy keys in localStorage (not yet migrated)
+     */
+    function hasLegacyKeys() {
+        return SecureStorage.hasLegacyKeys() ||
+            !!(localStorage.getItem(LEGACY_ECDH_PRIVATE_KEY) ||
+               localStorage.getItem(LEGACY_RSA_PRIVATE_KEY));
     }
 
     /**
@@ -205,7 +281,7 @@ const AuthModule = (function() {
      */
     async function regenerateKeys(onProgress) {
         try {
-            const token = getToken();
+            const token = await getToken();
             const userId = getUserId();
 
             if (!token || !userId) {
@@ -245,11 +321,11 @@ const AuthModule = (function() {
                 throw new Error('Failed to update keys on server');
             }
 
-            if (onProgress) onProgress('Storing new keys...');
+            if (onProgress) onProgress('Storing new keys securely...');
 
-            // Update local storage
-            localStorage.setItem(ECDH_PRIVATE_KEY, ecdhPrivateKey);
-            localStorage.setItem(RSA_PRIVATE_KEY, rsaPrivateKey);
+            // Update secure storage
+            await SecureStorage.setECDHPrivateKey(ecdhPrivateKey, userId);
+            await SecureStorage.setRSAPrivateKey(rsaPrivateKey, userId);
 
             // Clear all session keys
             CryptoModule.clearAllSessionKeys();
@@ -270,7 +346,7 @@ const AuthModule = (function() {
      * Revoke current keys
      */
     async function revokeKeys(reason) {
-        const token = getToken();
+        const token = await getToken();
         const userId = getUserId();
 
         if (!token || !userId) {
@@ -293,14 +369,54 @@ const AuthModule = (function() {
             throw new Error('Failed to revoke keys');
         }
 
-        // Clear all local data
+        // Clear all secure storage data
+        await SecureStorage.clearAll();
+
+        // Also clear legacy localStorage
         localStorage.clear();
 
         return { success: true };
     }
 
+    /**
+     * Create encrypted backup of keys
+     * @param {string} backupPassword - Password to encrypt backup
+     */
+    async function createKeyBackup(backupPassword) {
+        if (!isSecureStorageReady()) {
+            throw new Error('Secure storage not initialized');
+        }
+        return await SecureStorage.createBackup(backupPassword);
+    }
+
+    /**
+     * Restore keys from encrypted backup
+     * @param {string} backupData - Base64 encoded encrypted backup
+     * @param {string} backupPassword - Password to decrypt backup
+     */
+    async function restoreKeyBackup(backupData, backupPassword) {
+        return await SecureStorage.restoreBackup(backupData, backupPassword);
+    }
+
+    /**
+     * Re-initialize secure storage (e.g., after page refresh)
+     * Requires user to re-enter password
+     */
+    async function unlockStorage(password) {
+        return await initializeSecureStorage(password, false);
+    }
+
+    /**
+     * Check if storage needs to be unlocked
+     */
+    function needsUnlock() {
+        return !isSecureStorageReady() && (SecureStorage.hasLegacyKeys() ||
+            !!(localStorage.getItem(LEGACY_ECDH_PRIVATE_KEY)));
+    }
+
     // Public API
     return {
+        // Authentication
         register,
         login,
         logout,
@@ -308,11 +424,24 @@ const AuthModule = (function() {
         isAuthenticated,
         getToken,
         getUserId,
+
+        // Key management
         getECDHPrivateKey,
         getRSAPrivateKey,
         hasPrivateKeys,
+        hasLegacyKeys,
         regenerateKeys,
-        revokeKeys
+        revokeKeys,
+
+        // Secure storage
+        initializeSecureStorage,
+        isSecureStorageReady,
+        unlockStorage,
+        needsUnlock,
+
+        // Backup/Restore
+        createKeyBackup,
+        restoreKeyBackup
     };
 })();
 

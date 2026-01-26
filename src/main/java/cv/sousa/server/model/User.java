@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "users")
@@ -52,6 +54,21 @@ public class User extends PanacheEntity {
 
     @Column(columnDefinition = "TEXT")
     public String keyFingerprint;
+
+    // MFA (Multi-Factor Authentication) fields
+    @Column(name = "totp_secret", columnDefinition = "TEXT")
+    public String totpSecret;  // TOTP secret key (encrypted)
+
+    @Column(name = "mfa_enabled", nullable = false)
+    public boolean mfaEnabled = false;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_recovery_codes", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "recovery_code_hash")
+    public Set<String> recoveryCodes = new HashSet<>();  // BCrypt hashed recovery codes
+
+    @Column(name = "mfa_enabled_at")
+    public LocalDateTime mfaEnabledAt;
 
     public static User findByUserId(String nif) {
         return find("nif", nif).firstResult();

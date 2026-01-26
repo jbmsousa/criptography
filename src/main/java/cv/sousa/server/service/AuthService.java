@@ -17,11 +17,147 @@ public class AuthService {
     @Inject
     UserService userService;
 
-    // Session tokens mapped to user IDs
+    @Inject
+    TotpService totpService;
+
+    @Inject
+    RedisSessionService redisSessionService;
+
+    // Fallback in-memory session storage (used when Redis is unavailable)
     private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
 
     // Pending challenges for key verification
     private final Map<String, String> pendingChallenges = new ConcurrentHashMap<>();
+
+    // Pending MFA sessions (password verified, awaiting MFA)
+    private final Map<String, String> pendingMfaSessions = new ConcurrentHashMap<>();
+
+    /**
+     * Check if Redis session storage is available
+     */
+    private boolean useRedis() {
+        return redisSessionService != null && redisSessionService.isRedisAvailable();
+    }
+
+    /**
+     * Store session in Redis or fallback to in-memory
+     */
+    private void storeSession(String token, String userId) {
+        if (useRedis()) {
+            redisSessionService.storeSession(token, userId);
+        } else {
+            activeSessions.put(token, userId);
+        }
+    }
+
+    /**
+     * Remove session from Redis or in-memory
+     */
+    private String removeSession(String token) {
+        if (useRedis()) {
+            var userId = redisSessionService.validateSession(token);
+            redisSessionService.invalidateSession(token);
+            return userId.orElse(null);
+        } else {
+            return activeSessions.remove(token);
+        }
+    }
+
+    /**
+     * Login result containing authentication state
+     */
+    public record LoginResult(
+        boolean success,
+        String token,
+        boolean mfaRequired,
+        String mfaToken,
+        String error
+    ) {
+        public static LoginResult success(String token) {
+            return new LoginResult(true, token, false, null, null);
+        }
+
+        public static LoginResult mfaRequired(String mfaToken) {
+            return new LoginResult(false, null, true, mfaToken, null);
+        }
+
+        public static LoginResult failure(String error) {
+            return new LoginResult(false, null, false, null, error);
+        }
+    }
+
+    @Transactional
+    public LoginResult loginWithMfa(String userId, String password, String mfaCode) {
+        // Verify password
+        if (!userService.verifyPassword(userId, password)) {
+            return LoginResult.failure("Invalid credentials");
+        }
+
+        User user = User.findByUserId(userId);
+        if (user == null) {
+            return LoginResult.failure("User not found");
+        }
+
+        // Check if MFA is enabled
+        if (user.mfaEnabled) {
+            if (mfaCode == null || mfaCode.isEmpty()) {
+                // MFA required but not provided - create pending MFA session
+                String mfaToken = generateSessionToken();
+                pendingMfaSessions.put(mfaToken, userId);
+                return LoginResult.mfaRequired(mfaToken);
+            }
+
+            // Verify MFA code
+            if (!totpService.verifyMfa(user, mfaCode)) {
+                return LoginResult.failure("Invalid MFA code");
+            }
+        }
+
+        // Generate session token
+        String token = generateSessionToken();
+        storeSession(token, userId);
+
+        // Update user status
+        userService.setUserOnline(userId, true);
+        userService.updateLastLogin(userId);
+
+        return LoginResult.success(token);
+    }
+
+    /**
+     * Complete MFA verification for pending session
+     */
+    @Transactional
+    public LoginResult completeMfaLogin(String mfaToken, String mfaCode) {
+        String userId = pendingMfaSessions.get(mfaToken);
+        if (userId == null) {
+            return LoginResult.failure("Invalid or expired MFA session");
+        }
+
+        User user = User.findByUserId(userId);
+        if (user == null) {
+            pendingMfaSessions.remove(mfaToken);
+            return LoginResult.failure("User not found");
+        }
+
+        // Verify MFA code
+        if (!totpService.verifyMfa(user, mfaCode)) {
+            return LoginResult.failure("Invalid MFA code");
+        }
+
+        // Remove pending MFA session
+        pendingMfaSessions.remove(mfaToken);
+
+        // Generate session token
+        String token = generateSessionToken();
+        storeSession(token, userId);
+
+        // Update user status
+        userService.setUserOnline(userId, true);
+        userService.updateLastLogin(userId);
+
+        return LoginResult.success(token);
+    }
 
     @Transactional
     public Optional<String> login(String userId, String password) {
@@ -31,7 +167,7 @@ public class AuthService {
 
         // Generate session token
         String token = generateSessionToken();
-        activeSessions.put(token, userId);
+        storeSession(token, userId);
 
         // Update user status
         userService.setUserOnline(userId, true);
@@ -42,17 +178,23 @@ public class AuthService {
 
     @Transactional
     public void logout(String token) {
-        String userId = activeSessions.remove(token);
+        String userId = removeSession(token);
         if (userId != null) {
             userService.setUserOnline(userId, false);
         }
     }
 
     public Optional<String> validateSession(String token) {
+        if (useRedis()) {
+            return redisSessionService.validateSession(token);
+        }
         return Optional.ofNullable(activeSessions.get(token));
     }
 
     public boolean isSessionValid(String token) {
+        if (useRedis()) {
+            return redisSessionService.isSessionValid(token);
+        }
         return activeSessions.containsKey(token);
     }
 
@@ -117,7 +259,31 @@ public class AuthService {
     }
 
     public void invalidateAllUserSessions(String userId) {
-        activeSessions.entrySet().removeIf(entry -> entry.getValue().equals(userId));
+        if (useRedis()) {
+            redisSessionService.invalidateAllUserSessions(userId);
+        } else {
+            activeSessions.entrySet().removeIf(entry -> entry.getValue().equals(userId));
+        }
         userService.setUserOnline(userId, false);
     }
+
+    /**
+     * Get session statistics
+     */
+    public SessionStats getSessionStats() {
+        if (useRedis()) {
+            return new SessionStats(
+                redisSessionService.getTotalSessionCount(),
+                true,
+                "redis"
+            );
+        }
+        return new SessionStats(
+            activeSessions.size(),
+            false,
+            "in-memory"
+        );
+    }
+
+    public record SessionStats(long activeSessions, boolean persistent, String storageType) {}
 }

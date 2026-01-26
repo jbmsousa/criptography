@@ -33,6 +33,14 @@ public class Message extends PanacheEntity {
 
     public String sessionId;
 
+    // Double Ratchet header fields
+    @Column(columnDefinition = "TEXT")
+    public String ratchetDhPublicKey;  // Sender's current DH public key
+
+    public Integer ratchetPreviousChainLength;  // Length of previous sending chain
+
+    public Integer ratchetMessageNumber;  // Message number in current chain
+
     @Column(nullable = false)
     public LocalDateTime sentAt = LocalDateTime.now();
 

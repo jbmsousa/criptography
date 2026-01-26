@@ -34,11 +34,42 @@ public class AuthResource {
                 .build();
         }
 
-        return authService.login(req.userId, req.password)
-            .map(token -> Response.ok(new LoginResponse(token, req.userId)).build())
-            .orElse(Response.status(401)
-                .entity(new ErrorResponse("Invalid credentials"))
-                .build());
+        // Use MFA-aware login
+        AuthService.LoginResult result = authService.loginWithMfa(req.userId, req.password, req.mfaCode);
+
+        if (result.success()) {
+            return Response.ok(new LoginResponse(result.token(), req.userId, false, null)).build();
+        } else if (result.mfaRequired()) {
+            return Response.ok(new LoginResponse(null, req.userId, true, result.mfaToken())).build();
+        } else {
+            return Response.status(401)
+                .entity(new ErrorResponse(result.error()))
+                .build();
+        }
+    }
+
+    @POST
+    @Path("/login/mfa")
+    @Operation(summary = "Completar login com MFA",
+               description = "Completa o login com codigo MFA apos verificacao de password")
+    @APIResponse(responseCode = "200", description = "Autenticacao MFA bem sucedida")
+    @APIResponse(responseCode = "401", description = "Codigo MFA invalido")
+    public Response completeMfaLogin(MfaLoginRequest req) {
+        if (req.mfaToken == null || req.mfaCode == null) {
+            return Response.status(400)
+                .entity(new ErrorResponse("MFA token and code are required"))
+                .build();
+        }
+
+        AuthService.LoginResult result = authService.completeMfaLogin(req.mfaToken, req.mfaCode);
+
+        if (result.success()) {
+            return Response.ok(new LoginResponse(result.token(), null, false, null)).build();
+        } else {
+            return Response.status(401)
+                .entity(new ErrorResponse(result.error()))
+                .build();
+        }
     }
 
     @POST
@@ -132,14 +163,25 @@ public class AuthResource {
     public static class LoginRequest {
         public String userId;
         public String password;
+        public String mfaCode;  // Optional: TOTP code or recovery code
+    }
+
+    public static class MfaLoginRequest {
+        public String mfaToken;  // Token from initial login response
+        public String mfaCode;   // TOTP code or recovery code
     }
 
     public static class LoginResponse {
         public String token;
         public String userId;
-        public LoginResponse(String token, String userId) {
+        public boolean mfaRequired;
+        public String mfaToken;  // Token to use for MFA completion
+
+        public LoginResponse(String token, String userId, boolean mfaRequired, String mfaToken) {
             this.token = token;
             this.userId = userId;
+            this.mfaRequired = mfaRequired;
+            this.mfaToken = mfaToken;
         }
     }
 
@@ -164,6 +206,7 @@ public class AuthResource {
         public String userId; // Alias for backward compatibility
         public String keyFingerprint;
         public boolean isOnline;
+        public boolean mfaEnabled;
 
         public UserInfoResponse(User user) {
             this.nif = user.nif;
@@ -172,6 +215,7 @@ public class AuthResource {
             this.userId = user.nif; // Backward compatibility
             this.keyFingerprint = user.keyFingerprint;
             this.isOnline = user.isOnline;
+            this.mfaEnabled = user.mfaEnabled;
         }
     }
 

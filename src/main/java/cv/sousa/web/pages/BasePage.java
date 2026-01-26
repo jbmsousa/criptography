@@ -50,6 +50,13 @@ public abstract class BasePage extends WebPage {
             response.render(MetaDataHeaderItem.forMetaTag("auth-token", session.getAuthToken()));
         }
 
+        // Load core crypto and auth modules (order matters: dependencies first)
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/crypto.js"));
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/secure-storage.js"));
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/auth.js"));
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/double-ratchet.js"));
+        response.render(JavaScriptHeaderItem.forUrl("/static/js/group-crypto.js"));
+
         // Load auth-init.js to read meta tags and store in localStorage
         response.render(JavaScriptHeaderItem.forUrl("/static/js/auth-init.js"));
     }
