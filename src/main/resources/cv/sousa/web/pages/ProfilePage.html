@@ -88,8 +88,36 @@
                 </div>
             </div>
         </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Autenticação Multi-Factor (MFA)</h5>
+                    </div>
+                    <div class="card-body">
+                        <button id="setupMfa" class="btn btn-success mb-3">
+                            <i class="bi bi-qr-code"></i> Configurar MFA
+                        </button>
+                        <div id="verifySection" style="display:none" class="mt-3">
+                            <img id="qrCode" style="display:none" class="mb-3 border p-2">
+                            <p class="small text-muted">Secret: <code id="mfaSecret"></code></p>
+                            <div class="input-group mb-3" style="max-width:300px">
+                                <input type="text" id="totpCode" class="form-control" placeholder="Código TOTP">
+                                <button id="verifyMfa" class="btn btn-primary">Ativar</button>
+                            </div>
+                        </div>
+                        <hr>
+                        <div class="input-group" style="max-width:300px">
+                            <input type="text" id="disableCode" class="form-control" placeholder="Código para desativar">
+                            <button id="disableMfa" class="btn btn-outline-danger">Desativar MFA</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 
-    <!-- JavaScript loaded via Wicket renderHead -->
+    <script src="/static/js/mfa.js"></script>
 </body>
 </html>
