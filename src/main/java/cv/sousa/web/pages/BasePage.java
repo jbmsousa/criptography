@@ -78,8 +78,8 @@ public abstract class BasePage extends WebPage {
 
             navbar.addComponents(NavbarComponents.transform(
                 Navbar.ComponentPosition.RIGHT,
-                new NavbarButton<>(LogoutPage.class, Model.of("Sair (" + session.getUserId() + ")"))
-            ));
+                new NavbarButton<>(LogoutPage.class,
+                    Model.of("Sair (" + getDisplayName(session.getUserId()) + ")"))));
         } else {
             navbar.addComponents(NavbarComponents.transform(
                 Navbar.ComponentPosition.RIGHT,
@@ -94,6 +94,17 @@ public abstract class BasePage extends WebPage {
     protected void requireAuthentication() {
         if (!SecureMessagingSession.get().isAuthenticated()) {
             setResponsePage(LoginPage.class);
+        }
+    }
+    private String getDisplayName(String userId) {
+        try {
+            cv.sousa.server.service.UserService userService = io.quarkus.arc.Arc.container()
+                .instance(cv.sousa.server.service.UserService.class).get();
+            return userService.findByUserId(userId)
+                .map(u -> u.nome)
+                .orElse(userId);
+        } catch (Exception e) {
+            return userId; // Fallback in case of error
         }
     }
 }

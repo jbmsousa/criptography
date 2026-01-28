@@ -3,7 +3,7 @@
  * Handles WebSocket communication and encrypted messaging
  */
 
-const ChatModule = (function() {
+const ChatModule = (function () {
     'use strict';
 
     let ws = null;
@@ -271,11 +271,47 @@ const ChatModule = (function() {
      */
     async function handleKeyRotation(msg) {
         if (msg.senderId === chatPartnerId) {
-            console.log('Key rotation from partner');
+            console.log('🔄 Key rotation initiated by partner:', chatPartnerId);
+            console.log('Session ID:', getSessionId());
+
+            // Clear old session key
             CryptoModule.clearSessionKey(getSessionId());
-            partnerPublicKey = msg.publicKey;
+            console.log('✓ Old session key cleared');
+
+            // Update partner's public key if provided
+            if (msg.publicKey) {
+                partnerPublicKey = msg.publicKey;
+                console.log('✓ Partner public key updated');
+            }
+
+            // Derive new session key
             await deriveSessionKeyForChat();
-            triggerEvent('key_rotated', msg);
+            console.log('✓ New session key derived');
+
+            // Trigger event for UI updates
+            triggerEvent('key_rotated', {
+                sessionId: getSessionId(),
+                partnerId: chatPartnerId,
+                timestamp: new Date().toISOString()
+            });
+
+            console.log('✅ Key rotation completed successfully');
+        } else if (msg.message) {
+            // Automatic rotation triggered by server
+            console.log('🔄 Automatic key rotation triggered by server');
+            console.log('Message:', msg.message);
+
+            // Clear and regenerate session key
+            CryptoModule.clearSessionKey(getSessionId());
+            await deriveSessionKeyForChat();
+
+            triggerEvent('key_rotated', {
+                sessionId: getSessionId(),
+                automatic: true,
+                timestamp: new Date().toISOString()
+            });
+
+            console.log('✅ Automatic key rotation completed');
         }
     }
 

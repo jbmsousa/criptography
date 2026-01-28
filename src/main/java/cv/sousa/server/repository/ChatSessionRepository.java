@@ -36,6 +36,13 @@ public class ChatSessionRepository implements PanacheRepository<ChatSession> {
             LocalDateTime.now(), sessionId);
     }
 
+    public List<ChatSession> findSessionsNeedingRotation(LocalDateTime threshold) {
+        return list(
+            "active = true AND (keyRotatedAt IS NULL OR keyRotatedAt < ?1)",
+            threshold
+        );
+    }
+
     public ChatSession createOrGetSession(String user1, String user2) {
         return findByParticipants(user1, user2).orElseGet(() -> {
             ChatSession session = new ChatSession();

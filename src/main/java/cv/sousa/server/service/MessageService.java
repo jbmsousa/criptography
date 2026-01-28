@@ -15,9 +15,15 @@ public class MessageService {
     @Inject
     MessageRepository messageRepository;
 
+    @Inject
+    WebSocketService webSocketService;
+
     @Transactional
     public Message saveMessage(String senderId, String recipientId, String sessionId,
                                String encryptedContent, String signature) {
+        // Create or get chat session
+        webSocketService.getOrCreateSession(senderId, recipientId);
+
         Message message = new Message();
         message.senderId = senderId;
         message.recipientId = recipientId;

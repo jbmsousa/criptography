@@ -1,7 +1,9 @@
 package cv.sousa.web.pages;
 
+import cv.sousa.server.service.UserService;
 import cv.sousa.web.SecureMessagingSession;
 import cv.sousa.web.components.UserListPanel;
+import io.quarkus.arc.Arc;
 import org.apache.wicket.markup.head.IHeaderResponse;
 import org.apache.wicket.markup.head.JavaScriptHeaderItem;
 import org.apache.wicket.markup.html.basic.Label;
@@ -13,8 +15,16 @@ public class DashboardPage extends BasePage {
 
         SecureMessagingSession session = SecureMessagingSession.get();
 
-        add(new Label("welcomeMessage", "Welcome, " + session.getUserId() + "!"));
+        add(new Label("welcomeMessage", "Welcome, " +
+            getDisplayName(session.getUserId()) + "!"));
         add(new UserListPanel("userListPanel"));
+    }
+    UserService userService = Arc.container().instance(UserService.class).get();
+
+    private String getDisplayName(String userId) {
+        return userService.findByUserId(userId)
+            .map(u -> u.nome)
+            .orElse(userId);
     }
 
     @Override
