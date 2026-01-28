@@ -139,13 +139,14 @@ public class ChatWebSocket {
         ManagedContext requestContext = Arc.container().requestContext();
         requestContext.activate();
         try {
-            // Store the message
+            // Store the message (including sender-encrypted copy for history)
             Message storedMessage = messageService.saveMessage(
                 senderId,
                 message.recipientId,
                 message.sessionId,
                 message.encryptedContent,
-                message.signature
+                message.signature,
+                message.senderEncryptedContent
             );
 
             // Try to deliver to recipient
@@ -269,6 +270,7 @@ public class ChatWebSocket {
         msg.sessionId = extractJsonValue(json, "sessionId");
         msg.messageId = extractJsonValue(json, "messageId");
         msg.encryptedContent = extractJsonValue(json, "encryptedContent");
+        msg.senderEncryptedContent = extractJsonValue(json, "senderEncryptedContent");
         msg.signature = extractJsonValue(json, "signature");
         msg.publicKey = extractJsonValue(json, "publicKey");
         msg.salt = extractJsonValue(json, "salt");
@@ -348,6 +350,7 @@ public class ChatWebSocket {
         String sessionId;
         String messageId;
         String encryptedContent;
+        String senderEncryptedContent;
         String signature;
         String publicKey;
         String salt;

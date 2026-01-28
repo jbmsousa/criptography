@@ -21,6 +21,12 @@ public class MessageService {
     @Transactional
     public Message saveMessage(String senderId, String recipientId, String sessionId,
                                String encryptedContent, String signature) {
+        return saveMessage(senderId, recipientId, sessionId, encryptedContent, signature, null);
+    }
+
+    @Transactional
+    public Message saveMessage(String senderId, String recipientId, String sessionId,
+                               String encryptedContent, String signature, String senderEncryptedContent) {
         // Create or get chat session
         webSocketService.getOrCreateSession(senderId, recipientId);
 
@@ -29,6 +35,7 @@ public class MessageService {
         message.recipientId = recipientId;
         message.sessionId = sessionId;
         message.encryptedContent = encryptedContent;
+        message.senderEncryptedContent = senderEncryptedContent;
         message.signature = signature;
         message.sentAt = LocalDateTime.now();
 

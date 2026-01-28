@@ -40,7 +40,10 @@ public class MessageRepository implements PanacheRepository<Message> {
     }
 
     public List<Message> findRecentMessages(String user1, String user2, int limit) {
-        return find("(senderId = ?1 AND recipientId = ?2) OR (senderId = ?2 AND recipientId = ?1) ORDER BY sentAt DESC",
+        // Get most recent messages (DESC), then reverse to chronological order (ASC)
+        List<Message> messages = find("(senderId = ?1 AND recipientId = ?2) OR (senderId = ?2 AND recipientId = ?1) ORDER BY sentAt DESC",
             user1, user2).page(0, limit).list();
+        java.util.Collections.reverse(messages);
+        return messages;
     }
 }

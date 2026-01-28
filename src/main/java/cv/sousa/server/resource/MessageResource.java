@@ -152,6 +152,7 @@ public class MessageResource {
         public String recipientId;
         public String sessionId;
         public String encryptedContent;
+        public String senderEncryptedContent;
         public String signature;
         public String sentAt;
         public boolean delivered;
@@ -163,6 +164,7 @@ public class MessageResource {
             this.recipientId = message.recipientId;
             this.sessionId = message.sessionId;
             this.encryptedContent = message.encryptedContent;
+            this.senderEncryptedContent = message.senderEncryptedContent;
             this.signature = message.signature;
             this.sentAt = message.sentAt != null ? message.sentAt.toString() : null;
             this.delivered = message.delivered;

@@ -23,6 +23,7 @@ public class ChatPage extends BasePage {
             return;
         }
         String partnerName = chatPartnerId;
+        UserService userService = Arc.container().instance(UserService.class).get();
         cv.sousa.server.model.User user = userService.findByUserId(chatPartnerId).orElse(null);
         if (user != null) {
             partnerName = user.nome;
@@ -35,7 +36,6 @@ public class ChatPage extends BasePage {
         add(partnerIdLabel);
         add(new ChatPanel("chatPanel", chatPartnerId));
     }
-    UserService userService = Arc.container().instance(UserService.class).get();
     @Override
     protected String getPageTitle() {
         return "Chat with " + chatPartnerId + " - Secure Messaging";

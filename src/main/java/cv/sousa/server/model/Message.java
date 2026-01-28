@@ -29,6 +29,9 @@ public class Message extends PanacheEntity {
     public String encryptedContent;
 
     @Column(columnDefinition = "TEXT")
+    public String senderEncryptedContent;
+
+    @Column(columnDefinition = "TEXT")
     public String signature;
 
     public String sessionId;
